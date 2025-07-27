@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="static/style.css">
+    <!-- Link your external JavaScript file -->
+    <!-- <script src="static/script.js" defer></script>     -->
+    <title>Punctuality Portal System</title>
+    <link rel="icon" href="static/mrcet.png" type="image/png">
+    <!-- Add this to your <head> section -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+
+
+</head>
+<body>
+    <div id="menuBar">
+        <div id="dropdown">
+            <button class="dropbtn"><span>...</span>
+                <i class="fa fa-caret-down"></i>
+            </button>
+            <div id="dropdown-content">
+                
+                <!-- <a href="#" onclick="showDateRangePicker()">Download</a> -->
+                <a href="#" onclick="downloadDatabase()">Download</a>
+                <a href="#" onclick="clearDatabase()">Clear</a>
+            </div>
+        </div>
+    </div>
+
+
+    <h1><span>Punctuality Portal System</span></h1>
+    <form id="myForm" action="{{ url_for('record_latecomer') }}" method="post" onsubmit="return validateEntry()">
+        <label for="student_id">Student ID:</label>
+        <input type="text" id="student_id" placeholder="Enter Student ID.." name="student_id" required>
+        <label for="year">Year: </label>
+        <input type="text" id="year" placeholder="Enter Year.." name="year" required oninput="updateStudentID()">
+        <label for="section">Section : </label>
+        <input type="text" id="section" placeholder="Enter Section.." name="section" required>
+        <button id="submitBtn" type="submit">Submit</button>
+        <!-- Remove the previous message element -->
+    </form>
+
+
+    <!-- <script defer src="static/script.js"></script> -->
+
+<script >
+    function updateStudentID() {
+    var yearInput = document.getElementById('year').value.toUpperCase();
+    var sectionInput = document.getElementById('section').value.toUpperCase();
+    var studentIDInput = document.getElementById('student_id');
+
+    var studentIDPrefix = '';
+    if (yearInput === '2') {
+        studentIDPrefix = '22N31A0';
+    } else if (yearInput === '3') {
+        studentIDPrefix = '21N31A0';
+    } else if (yearInput === '3L') {
+        studentIDPrefix = '22N35A0';
+    } else if (yearInput === '2L') {
+        studentIDPrefix = '23N35A0';
+    }
+
+    studentIDInput.value = studentIDPrefix + sectionInput;
+}
+
+//for making the student_id and Section to capitals Automatically
+function handleInput(event) {
+    var inputValue = event.target.value;
+    event.target.value = inputValue.toUpperCase();
+}
+document.getElementById("student_id").addEventListener("input", handleInput);
+document.getElementById("section").addEventListener("input", handleInput);
+
+
+
+
+
+//////////////////////////////important///////////////////////////
+function validateEntry() {
+    var studentIdInput = document.getElementById('student_id');
+    var yearInput = document.getElementById('year');
+    var sectionInput = document.getElementById('section');
+    var appMessage = document.getElementById('appMessage');
+    var myForm = document.getElementById('myForm');
+
+    // Get the entered student ID
+    var enteredStudentId = studentIdInput.value;
+
+    // Check if the entered student ID is repeated for 3 or more times
+    var studentIdCount = 0;
+    var latecomersData = JSON.parse('{{ latecomers | tojson | safe }}');
+
+    for (var i = 0; i < latecomersData.length; i++) {
+        var latecomerId = latecomersData[i][1];
+        
+        if (enteredStudentId.toUpperCase() === latecomerId.toUpperCase()) {
+            studentIdCount++;
+        }
+        
+        if (studentIdCount >= 3 ) {
+            // Add a class to the form to change its color
+            myForm.classList.add('error-color');
+            // Set focus on the input
+            studentIdInput.focus();
+
+            // Fetch phone number from backend
+            fetchPhoneNumber(enteredStudentId);
+            // Clear the form after the error-color animation
+            setTimeout(function() {
+                myForm.reset();
+            }, 2000); // Adjust the delay time as needed (in milliseconds)
+            // Prevent form submission
+            return false;
+        }
+    }
+    
+    // If no warning condition is met, hide the message and allow form submission
+    myForm.classList.remove('error-color');
+    return true;
+}
+////////////////////////////////////Extraaaaaaaaaa
+
+
+
+
+
+// Function to fetch phone number from backend
+function fetchPhoneNumber(studentId) {
+    fetch('/getPhoneNumber?id=' + studentId)
+    .then(response => response.json())
+    .then(data => {
+        if (data.phone_number) {
+            // Phone number retrieved successfully, send SMS
+            sendSMS(data.phone_number, "Your student with ID "+studentId+ " coming late to college.");
+        } else {
+            console.error('Phone number not found for student ID:', studentId);
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching phone number:', error);
+    });
+}
+
+// Function to send SMS using Twilio
+function sendSMS(to, message) {
+    fetch('/sendSMS', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            to: to,
+            message: message
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('SMS sent successfully');
+        } else {
+            throw new Error('Failed to send SMS');
+        }
+    })
+    .catch(error => {
+        console.error('Error sending SMS:', error);
+    });
+}
+
+///////////////////////////////////////////////
+
+
+
+// Clear the blinking effect when the input is cleared
+function clearInput() {
+    var myForm = document.getElementById('myForm'); // Replace 'myForm' with the actual ID of your form
+    myForm.classList.remove('error-color');
+}
+// Attach the clearInput function to the oninput event of the input element
+document.getElementById('student_id').addEventListener('input', clearInput);
+
+
+function downloadDatabase() {
+var latecomersData = JSON.parse('{{ latecomers | tojson | safe }}');
+if (latecomersData.length === 0) {
+alert("No data available to download.");
+return;
+}
+
+var csvContent = "sep=,\nStudent ID,Year,Section,date,time\n";
+
+// Add each entry to the CSV content
+latecomersData.forEach(entry => {
+// Assuming the structure is [Student ID, Year, Section, Entry Count, Entry Date, Entry Time]
+var formattedEntry = entry.slice(1, 6).concat(entry.slice(6)); // Exclude ID and Date
+csvContent += formattedEntry.join(',') + '\n';
+});
+
+// Create a Blob and generate a download link
+var blob = new Blob([csvContent], { type: 'text/csv' });
+var link = document.createElement('a');
+link.href = window.URL.createObjectURL(blob);
+link.download = 'latecomers_database.csv';
+
+// Append the link to the document and trigger a click to start the download
+document.body.appendChild(link);
+link.click();
+
+// Remove the link from the document
+document.body.removeChild(link);
+}
+
+
+
+
+/////////////////////////////////////////
+
+
+function clearDatabase() {
+    if (confirm("Are you sure you want to clear the entire database?")) {
+        // Send an AJAX request to the server to clear the database
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '{{ url_for("clear_database") }}', true);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                // Refresh the page after clearing the database
+                window.location.reload();
+            }
+        };
+        xhr.send();
+    }
+}
+
+    </script>
+</body>
+</html>
